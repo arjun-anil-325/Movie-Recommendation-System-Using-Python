@@ -4,49 +4,57 @@ import difflib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-movies_data = pd.read_csv(r"C:\Users\arjun\OneDrive\Desktop\movies.csv") # loading the data from the csv file to apandas dataframe
+# Load the dataset
+try:
+    movies = pd.read_csv(r"C:\Users\arjun\OneDrive\Desktop\movies.csv")
+except FileNotFoundError:
+    print("Error: Unable to load the CSV file. Please check the file path.")
+    exit()
 
-selected_features = ['genres','keywords','tagline','cast','director'] # selecting the relevant features for recommendation
+# Select the features to use for generating recommendations
+selected_features = ['genres', 'keywords', 'tagline', 'cast', 'director']
 
+# Replace missing values with empty strings
 for feature in selected_features:
-  movies_data[feature] = movies_data[feature].fillna('') # replacing the null valuess with null string
+    movies[feature] = movies[feature].fillna('')
 
-# combining all the 5 selected features
-combined_features = movies_data['genres']+' '+movies_data['keywords']+' '+movies_data['tagline']+' '+movies_data['cast']+' '+movies_data['director']# combining all the 5 selected features # combining all the 5 selected features# co
+# Combine all selected features into a single text
+movies['combined_features'] = movies[selected_features].apply(lambda x: ' '.join(x), axis=1)
 
-# print(combined_features)
+# Convert text into feature vectors using TF-IDF
+vectorizer = TfidfVectorizer()
+feature_vectors = vectorizer.fit_transform(movies['combined_features'])
 
-vectorizer = TfidfVectorizer() # converting the text data to feature vectors
-feature_vectors = vectorizer.fit_transform(combined_features)
-# print(feature_vectors)
+# Calculate the cosine similarity score
+similarity = cosine_similarity(feature_vectors)
 
-similarity = cosine_similarity(feature_vectors) # getting the similarity scores using cosine similarity
-# print(similarity)
+# Get user input for a movie
+movie_input = input("Enter a movie you like: ").strip().lower()
+movie_titles = movies['title'].str.lower().tolist()
 
-movie_name = input(' Enter your favourite movie name : ') # getting the movie name from the user
-list_of_all_titles = movies_data['title'].tolist() # creating a list with all the movie names given in the dataset
-find_close_match = difflib.get_close_matches(movie_name, list_of_all_titles) # finding the close match for the movie name given by the user
-# print(find_close_match)
+# Find the closest match for the input
+matches = difflib.get_close_matches(movie_input, movie_titles)
 
-close_match = find_close_match[0]
-# print(close_match)
+if matches:
+    match_title = matches[0]
+    movie_index = movies[movies['title'].str.lower() == match_title].index[0]
+    similarity_scores = list(enumerate(similarity[movie_index]))
+    sorted_movies = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
 
-index_of_the_movie = movies_data[movies_data.title == close_match]['index'].values[0] # finding the index of the movie with title
-# print(index_of_the_movie)
+    print(f"\nMovies recommended based on '{movies.loc[movie_index, 'title']}':\n")
 
-similarity_score = list(enumerate(similarity[index_of_the_movie])) # getting a list of similar movies
-# print(similarity_score)
+    try:
+        count = int(input("How many recommendations do you want? "))
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+        exit()
 
-sorted_similar_movies = sorted(similarity_score, key = lambda x:x[1], reverse = True) # sorting the movies based on their similarity score
-# print(sorted_similar_movies)
-
-print('Movies suggested for you : \n') # print the name of similar movies based on the index
-
-i = 1
-required= int(input("Enter the number of movies required : "))
-for movie in sorted_similar_movies:
-  index = movie[0]
-  title_from_index = movies_data[movies_data.index==index]['title'].values[0]
-  if (i<required+1):
-    print(i, '.',title_from_index)
-    i+=1
+    i = 0
+    for index, score in sorted_movies:
+        if index != movie_index:
+            print(movies.loc[index, 'title'])
+            i += 1
+        if i >= count:
+            break
+else:
+    print("No matching movie found. Please try another name.")
